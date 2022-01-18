@@ -12,17 +12,16 @@ const getEthereumContract = () => {
   const signer = provider.getSigner();
   const transactionContract = new ethers.Contract(contractAddress, contractABI, signer);
 
-  console.log({
-    provider,
-    signer,
-    transactionContract
-  })
+  return transactionContract;
+
 }
 
 export const TransactionProvider = ({ children }) => {
 
   const [currentAccount, setCurrentAccount] = useState("");
-  const [formData, setFormData] = useState({ addressTo: '', amount: '', keyword: '', message: '' })
+  const [formData, setFormData] = useState({ addressTo: '', amount: '', keyword: '', message: '' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [transactionCount, setTransactionCount] = useState(localStorage.getItem('transactionCount'));
 
   const handleChange = (e, name) => {
     setFormData((prevSate) => ({ ...prevSate, [name]: e.target.value }));
@@ -59,9 +58,35 @@ export const TransactionProvider = ({ children }) => {
     try {
       if (!ethereum) return alert("Please install Metamask");
 
-      const { addressTo, amount, keyword, message } = formData;
+      console.log(formData);
 
-      getEthereumContract();
+      const { addressTo, amount, keyword, message } = formData;
+      const transactionContract = getEthereumContract();
+      const parsedAmount = ethers.utils.parseEther(amount);
+
+      await ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: currentAccount,
+          to: addressTo,
+          gas: '0x5208', // 21000 gwei
+          value: parsedAmount._hex, // 0.00001
+        }]
+      })
+
+      const txHash = await transactionContract.addToBlockchain(addressTo, parsedAmount, message, keyword);
+
+      setIsLoading(true);
+      console.log(`Loading = ${txHash.hash}`);
+
+      await txHash.wait();
+
+      setIsLoading(false);
+      console.log(`Success = ${txHash.hash}`);
+
+      const transactionCount = await transactionContract.getTransactionCount();
+
+      setTransactionCount(transactionCount.toNumber());
 
     } catch (error) {
       console.log(error);
